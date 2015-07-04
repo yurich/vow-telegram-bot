@@ -1,0 +1,30 @@
+{
+  "name": "vow-telegram-bot",
+  "version": "0.0.1",
+  "description": "Telegram Bot API",
+  "main": "index.js",
+  "keywords": [
+      "telegram bot api",
+      "telegram bot",
+      "telegram api",
+      "telegram",
+      "bot",
+      "api"
+  ],
+  "author": "Andrey Smirnov <smirnovandr@yandex.ru>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yurich/vow-telegram-bot.git"
+  },
+  "dependencies": {
+    "inherit": "^2.2.2",
+    "request": "^2.58.0",
+    "vow": "^0.4.10"
+  },
+  "devDependencies": {},
+  "bugs": {
+    "url": "https://github.com/yurich/vow-telegram-bot/issues"
+  },
+  "homepage": "https://github.com/yurich/vow-telegram-bot"
+}
