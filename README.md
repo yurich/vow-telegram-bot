@@ -1,4 +1,4 @@
-# vow-telegram-api
+# vow-telegram-bot
 ```sh
 npm install vow-telegram-bot
 ```
