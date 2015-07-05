@@ -53,7 +53,11 @@ var VowTelegramBot = inherit(EventEmitter, {
                     _this._polling();
                 },
                 function(data) {
-                    console.log(data.description + ' [' + data.error_code + ']');
+                    console.log(
+                        data.description
+                            ? data.description + ' [' + data.error_code + ']'
+                            : 'Unknown error. Check your token.'
+                    );
                 }
             );
         }
