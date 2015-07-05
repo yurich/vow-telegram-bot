@@ -22,6 +22,8 @@ bot.on('message', function(message) {
     bot.sendMessage({
         chat_id: message.chat.id,
         text: 'Test message from bot'
+    }).then(function(message) {
+        console.log('Message sent', message);
     });
 
 });
@@ -49,6 +51,8 @@ bot.on('message', function(message) {
             chat_id: message.chat.id,
             photo: 'example.png',
             caption: 'Photo from bot'
+        }).then(function(message) {
+            console.log('Photo sent', message);
         });
     }, 5000);
 

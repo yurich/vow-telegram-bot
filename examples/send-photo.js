@@ -18,6 +18,8 @@ bot.on('message', function(message) {
             chat_id: message.chat.id,
             photo: 'example.png',
             caption: 'Photo from bot'
+        }).then(function(message) {
+            console.log('Photo sent', message);
         });
     }, 5000);
 

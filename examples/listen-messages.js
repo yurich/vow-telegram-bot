@@ -11,6 +11,8 @@ bot.on('message', function(message) {
     bot.sendMessage({
         chat_id: message.chat.id,
         text: 'Test message from bot'
+    }).then(function(message) {
+        console.log('Message sent', message);
     });
 
 });
