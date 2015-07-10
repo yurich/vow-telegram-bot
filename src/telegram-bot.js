@@ -251,9 +251,14 @@ var VowTelegramBot = inherit(EventEmitter, {
 
     _processMessages: function(messages) {
 
+        var nameRE = new RegExp('(@' + this.username + ')', 'gi'),
+            message;
+
         for (var i = 0, l = messages.length; i < l; i++) {
-            if (messages[i].message) {
-                this.emit('message', messages[i].message);
+            message = messages[i].message;
+            if (message) {
+                message.text && (message.text = message.text.replace(nameRE, '').trim());
+                this.emit('message', message);
             }
         }
 
