@@ -50,6 +50,7 @@ var VowTelegramBot = inherit(EventEmitter, {
             this.getMe().then(
                 function (data) {
                     console.log('Hi! My name is %s', data.username);
+                    this.username = data.username;
                     _this._polling();
                 },
                 function(data) {
