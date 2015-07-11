@@ -36,8 +36,6 @@ var VowTelegramBot = inherit(EventEmitter, {
             throw new Error('Telegram Bot Token is required parameter!');
         }
 
-        var _this = this;
-
         this._offset = 0;
         this._url = 'https://api.telegram.org/bot' + options.token + '/';
         //this._webhook = options.webhook;
@@ -47,20 +45,7 @@ var VowTelegramBot = inherit(EventEmitter, {
         if (options.polling) {
             this._pollingTimeout = options.polling.timeout || 3;
             this._pollingLimit = options.polling.limit || 100;
-            this.getMe().then(
-                function (data) {
-                    console.log('Hi! My name is %s', data.username);
-                    this.username = data.username;
-                    _this._polling();
-                },
-                function(data) {
-                    console.log(
-                        data.description
-                            ? data.description + ' [' + data.error_code + ']'
-                            : 'Unknown error. Check your token.'
-                    );
-                }
-            );
+            this._startPolling();
         }
 
         // this._configureWebHookServer();
@@ -261,6 +246,28 @@ var VowTelegramBot = inherit(EventEmitter, {
                 this.emit('message', message);
             }
         }
+
+    },
+
+    _startPolling: function() {
+
+        var _this = this;
+
+        this.getMe().then(
+            function (data) {
+                console.log('Hi! My name is %s', data.username);
+                _this.username = data.username;
+                _this._polling();
+            },
+            function(data) {
+                console.log(
+                    data.description
+                        ? data.description + ' [' + data.error_code + ']'
+                        : 'Unknown error. Check your token.'
+                );
+                setTimeout(_this._startPolling.bind(_this), 1000);
+            }
+        );
 
     },
 
