@@ -310,17 +310,34 @@ var VowTelegramBot = inherit(EventEmitter, {
             options.headers = action.headers;
         }
 
-        request(options, function(err, msg, res) {
-
-            if (res && res.ok) {
-                typeof onSuccess === 'function' && onSuccess(res.result);
-                defer.resolve(res.result);
-            } else {
-                typeof onError === 'function' && onError(res);
-                defer.reject(res);
+        if (params && params.base64 && action && action.file) {
+            var r = request.post(options.url, function(err, msg, res) {
+                if (res && res.ok) {
+                    typeof onSuccess === 'function' && onSuccess(res.result);
+                    defer.resolve(res.result);
+                } else {
+                    typeof onError === 'function' && onError(res);
+                    defer.reject(res);
+                }
+            });
+            var form = r.form();
+            form.append(action.file, new Buffer(params[action.file], 'base64'), { filename: 'image.jpg' });
+            for (var i in params) {
+                if (params.hasOwnProperty(i) && i !== action.file && i !== 'base64') {
+                    form.append(i, params[i]);
+                }
             }
-
-        });
+        } else {
+            request(options, function(err, msg, res) {
+                if (res && res.ok) {
+                    typeof onSuccess === 'function' && onSuccess(res.result);
+                    defer.resolve(res.result);
+                } else {
+                    typeof onError === 'function' && onError(res);
+                    defer.reject(res);
+                }
+            });
+        }
 
         return defer.promise();
 
@@ -331,7 +348,9 @@ var VowTelegramBot = inherit(EventEmitter, {
         var method = this._apiMethods[method];
 
         if (method && method.file && typeof params[method.file] === 'string') {
-            params[method.file] = fs.createReadStream(params[method.file]);
+            if (fs.existsSync(params[method.file])) {
+                params[method.file] = fs.createReadStream(params[method.file]);
+            } // else maybe base64?
         }
 
     }
