@@ -52,6 +52,12 @@ var VowTelegramBot = inherit(EventEmitter, {
 
     },
 
+    polling: function(options) {
+        this._pollingTimeout = options.timeout || 3;
+        this._pollingLimit = options.limit || 100;
+        this._startPolling();
+    },
+
     /**
      * Use this method to receive incoming updates using long polling. An Array of Update objects is returned.
      * @param {Object} [params]
