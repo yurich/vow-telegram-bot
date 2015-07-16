@@ -53,8 +53,8 @@ var VowTelegramBot = inherit(EventEmitter, {
     },
 
     polling: function(options) {
-        this._pollingTimeout = options.timeout || 3;
-        this._pollingLimit = options.limit || 100;
+        this._pollingTimeout = options && options.timeout || 3;
+        this._pollingLimit = options && options.limit || 100;
         this._startPolling();
     },
 
