@@ -43,9 +43,7 @@ var VowTelegramBot = inherit(EventEmitter, {
         this._apiMethods = apiMethods;
 
         if (options.polling) {
-            this._pollingTimeout = options.polling.timeout || 3;
-            this._pollingLimit = options.polling.limit || 100;
-            this._startPolling();
+            this.polling(options.polling);
         }
 
         // this._configureWebHookServer();
@@ -82,21 +80,20 @@ var VowTelegramBot = inherit(EventEmitter, {
         }
 
         this._request('getUpdates', {
-            timeout: timeout || this._pollingTimeout,
-            limit: limit || this._pollingLimit,
-            offset: offset || this._offset + 1
-        }).then(
-            function(result) {
+                timeout: timeout || this._pollingTimeout,
+                limit: limit || this._pollingLimit,
+                offset: offset || this._offset + 1
+            })
+            .then(function(result) {
                 var last = result[result.length - 1]
                 last && (_this._offset = last.update_id);
                 typeof onSuccess === 'function' && onSuccess(result);
                 defer.resolve(result);
-            },
-            function(result) {
+            })
+            .fail(function(result) {
                 typeof onError === 'function' && onError(result);
                 defer.reject(result);
-            }
-        );
+            });
 
         return defer.promise();
 
@@ -259,32 +256,35 @@ var VowTelegramBot = inherit(EventEmitter, {
 
         var _this = this;
 
-        this.getMe().then(
-            function (data) {
+        this.getMe()
+            .then(function (data) {
                 console.log('Hi! My name is %s', data.username);
                 _this.username = data.username;
                 _this.id = data.id;
                 _this._polling();
-            },
-            function(data) {
+            })
+            .fail(function(data) {
                 console.log(
                     data.description
                         ? data.description + ' [' + data.error_code + ']'
                         : 'Unknown error. Check your token.'
                 );
                 setTimeout(_this._startPolling.bind(_this), 1000);
-            }
-        );
+            });
 
     },
 
     _polling: function() {
 
         var _this = this;
-        this.getUpdates().then(function(messages) {
-            _this._processMessages(messages);
-            _this._polling();
-        });
+        this.getUpdates()
+            .then(function(messages) {
+                _this._processMessages(messages);
+                _this._polling();
+            })
+            .fail(function() {
+                _this._polling();
+            });
 
     },
 
@@ -317,33 +317,39 @@ var VowTelegramBot = inherit(EventEmitter, {
             options.headers = action.headers;
         }
 
-        if (params && params.base64 && action && action.file) {
-            var r = request.post(options.url, function(err, msg, res) {
-                if (res && res.ok) {
-                    typeof onSuccess === 'function' && onSuccess(res.result);
-                    defer.resolve(res.result);
-                } else {
-                    typeof onError === 'function' && onError(res);
-                    defer.reject(res);
+        try {
+
+            if (params && params.base64 && action && action.file) {
+                var r = request.post(options.url, function(err, msg, res) {
+                    if (res && res.ok) {
+                        typeof onSuccess === 'function' && onSuccess(res.result);
+                        defer.resolve(res.result);
+                    } else {
+                        typeof onError === 'function' && onError(res);
+                        defer.reject(res);
+                    }
+                });
+                var form = r.form();
+                form.append(action.file, new Buffer(params[action.file], 'base64'), { filename: 'image.jpg' });
+                for (var i in params) {
+                    if (params.hasOwnProperty(i) && i !== action.file && i !== 'base64') {
+                        form.append(i, params[i]);
+                    }
                 }
-            });
-            var form = r.form();
-            form.append(action.file, new Buffer(params[action.file], 'base64'), { filename: 'image.jpg' });
-            for (var i in params) {
-                if (params.hasOwnProperty(i) && i !== action.file && i !== 'base64') {
-                    form.append(i, params[i]);
-                }
+            } else {
+                request(options, function(err, msg, res) {
+                    if (res && res.ok) {
+                        typeof onSuccess === 'function' && onSuccess(res.result);
+                        defer.resolve(res.result);
+                    } else {
+                        typeof onError === 'function' && onError(res);
+                        defer.reject(res);
+                    }
+                });
             }
-        } else {
-            request(options, function(err, msg, res) {
-                if (res && res.ok) {
-                    typeof onSuccess === 'function' && onSuccess(res.result);
-                    defer.resolve(res.result);
-                } else {
-                    typeof onError === 'function' && onError(res);
-                    defer.reject(res);
-                }
-            });
+
+        } catch (e) {
+            defer.reject({ status: 'error', exception: e });
         }
 
         return defer.promise();
@@ -356,7 +362,9 @@ var VowTelegramBot = inherit(EventEmitter, {
 
         if (method && method.file && typeof params[method.file] === 'string') {
             if (fs.existsSync(params[method.file])) {
-                params[method.file] = fs.createReadStream(params[method.file]);
+                try {
+                    params[method.file] = fs.createReadStream(params[method.file]);
+                } catch (e) {}
             } // else maybe base64?
         }
 
