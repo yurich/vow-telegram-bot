@@ -245,6 +245,7 @@ var VowTelegramBot = inherit(EventEmitter, {
         for (var i = 0, l = messages.length; i < l; i++) {
             message = messages[i].message;
             if (message) {
+                // TODO: move it
                 message.text && (message.text = message.text.replace(nameRE, '').trim());
                 this.emit('message', message);
             }
@@ -303,49 +304,107 @@ var VowTelegramBot = inherit(EventEmitter, {
 
     _request: function(method, params, onSuccess, onError) {
 
-        this._checkFiles(method, params);
-
         var defer = vow.defer(),
-            action = this._apiMethods[method],
+            action = this._apiMethods[method] || {},
             options = {
-                url: this._url + method,
-                formData: params
-            };
+                url: this._url + method
+            },
+            files = params && params[action.file],
+            index = 0,
+            isURL;
 
-        if (action) {
-            options.gzip = action.gzip;
-            options.headers = action.headers;
+        if (action.file) {
+            if (fs.existsSync(params[action.file])) {
+                // Local file
+                try {
+                    params[action.file] = fs.createReadStream(params[action.file]);
+                } catch (e) {}
+            } else if (params.base64) {
+                // Base64-encoded file
+                params.isFile = true;
+                params[action.file] = new Buffer(params[action.file], 'base64');
+            } else {
+                // URL
+                isURL = true;
+            }
         }
+
+        action.gzip && (options.gzip = action.gzip);
+        action.headers && (options.headers = action.headers);
+
+        if (isURL) {
+            this._tryRequest(defer, index, {
+                params: params,
+                action: action,
+                options: options,
+                files: files,
+                onSuccess: onSuccess,
+                onError: onError
+            })
+        } else {
+            this._requestAPI(options, params, action, onSuccess, onError)
+                .then(function(res) {
+                    defer.resolve(res);
+                }.bind(this))
+                .fail(function(res) {
+                    defer.reject(res);
+                }.bind(this));
+        }
+
+        return defer.promise();
+
+    },
+
+    _tryRequest: function(defer, index, ext) {
+        var params = ext.params,
+            action = ext.action,
+            options = ext.options,
+            files = ext.files,
+            onSuccess = ext.onSuccess,
+            onError = ext.onError,
+            deferExternals = vow.defer();
+
+        this._requestExternalFiles(deferExternals, files, index, function(data) {
+                params[action.file] = new Buffer(data);
+                params.isFile = true;
+                this._requestAPI(options, params, action, onSuccess, onError)
+                    .then(function(res) {
+                        defer.resolve(res);
+                    }.bind(this))
+                    .fail(function(res) {
+                        if ((files instanceof Array) && index < files.length - 1) {
+                            this._tryRequest(defer, index, ext);
+                        } else {
+                            defer.reject(res);
+                        }
+                    }.bind(this));
+            }.bind(this))
+        return defer.promise();
+    },
+
+    _requestAPI: function(options, params, action, onSuccess, onError) {
+
+        var defer = vow.defer();
 
         try {
 
-            if (params && params.base64 && action && action.file) {
-                var r = request.post(options.url, function(err, msg, res) {
-                    if (res && res.ok) {
-                        typeof onSuccess === 'function' && onSuccess(res.result);
-                        defer.resolve(res.result);
-                    } else {
-                        typeof onError === 'function' && onError(res);
-                        defer.reject(res);
-                    }
-                });
+            var r = request.post(options, function(err, msg, res) {
+                if (res && res.ok) {
+                    typeof onSuccess === 'function' && onSuccess(res.result);
+                    defer.resolve(res.result);
+                } else {
+                    typeof onError === 'function' && onError(res);
+                    defer.reject(res);
+                }
+            });
+
+            if (params) {
                 var form = r.form();
-                form.append(action.file, new Buffer(params[action.file], 'base64'), { filename: 'image.jpg' });
                 for (var i in params) {
-                    if (params.hasOwnProperty(i) && i !== action.file && i !== 'base64') {
-                        form.append(i, params[i]);
+                    if (params.hasOwnProperty(i) && i !== 'base64' && i !== 'isFile') {
+                        form.append(i, params[i], params.isFile && i === action.file ? { filename: 'image.jpg' } : undefined);
                     }
                 }
-            } else {
-                request(options, function(err, msg, res) {
-                    if (res && res.ok) {
-                        typeof onSuccess === 'function' && onSuccess(res.result);
-                        defer.resolve(res.result);
-                    } else {
-                        typeof onError === 'function' && onError(res);
-                        defer.reject(res);
-                    }
-                });
             }
 
         } catch (e) {
@@ -356,17 +415,52 @@ var VowTelegramBot = inherit(EventEmitter, {
 
     },
 
-    _checkFiles: function(method, params) {
+    _requestExternalFiles: function(defer, urls, index, callback) {
 
-        var method = this._apiMethods[method];
+        urls instanceof Array || (urls = [urls]);
 
-        if (method && method.file && typeof params[method.file] === 'string') {
-            if (fs.existsSync(params[method.file])) {
-                try {
-                    params[method.file] = fs.createReadStream(params[method.file]);
-                } catch (e) {}
-            } // else maybe base64?
+        var _this = this;
+
+        this._requestFile(urls[index], callback)
+            .then(function(res) {
+                defer.resolve(res);
+            })
+            .fail(function(res) {
+                index++;
+                if (urls[index]) {
+                    _this._requestExternalFiles(defer, urls, index, callback);
+                } else {
+                    defer.reject(res);
+                }
+            });
+
+        return defer.promise();
+
+    },
+
+    _requestFile: function(url, callback) {
+
+        var defer = vow.defer(),
+            data = new Buffer(0),
+            req;
+
+        try {
+            req = request({ url: url, timeout: 400 })
+                .on('data', function(chunk) {
+                    data = Buffer.concat([data, chunk]);
+                })
+                .on('end', function(res) {
+                    callback(data);
+                    defer.resolve({ status: 'ok', url: url });
+                })
+                .on('error', function(err) {
+                    defer.reject({ status: 'error', url: url, error: err });
+                });
+        } catch (e) {
+            defer.reject({ status: 'error', error: 'Unknown exception', exception: e });
         }
+
+        return defer.promise();
 
     }
 
