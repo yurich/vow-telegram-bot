@@ -1,4 +1,5 @@
 var EventEmitter = require('events').EventEmitter,
+    debug = require('debug')('vow-telegram-bot'),
     inherit = require('inherit'),
     request = require('request'),
     vow = require('vow'),
@@ -33,6 +34,7 @@ var VowTelegramBot = inherit(EventEmitter, {
 
     __constructor: function(options) {
         if (!options.token) {
+            debug('No token for telegram bot api');
             throw new Error('Telegram Bot Token is required parameter!');
         }
 
@@ -43,6 +45,7 @@ var VowTelegramBot = inherit(EventEmitter, {
         this._apiMethods = apiMethods;
 
         if (options.polling) {
+            debug('Start polling at init')
             this.polling(options.polling);
         }
 
@@ -257,19 +260,19 @@ var VowTelegramBot = inherit(EventEmitter, {
 
         var _this = this;
 
+        debug('Start polling with timeout=%s, limit=%s, offset=%s', this._pollingTimeout, this._pollingLimit, this._offset);
+
         this.getMe()
             .then(function (data) {
                 console.log('Hi! My name is %s', data.username);
                 _this.username = data.username;
                 _this.id = data.id;
+                debug('Everything is ok, current bot is [%s] %s', data.id, data.username);
                 _this._polling();
             })
             .fail(function(data) {
-                console.log(
-                    data.description
-                        ? data.description + ' [' + data.error_code + ']'
-                        : 'Unknown error. Check your token.'
-                );
+                debug('getMe error, check your token: [%s] %s', data.description, data.error_code);
+                debug('Trying to start polling after 1s...');
                 setTimeout(_this._startPolling.bind(_this), 1000);
             });
 
@@ -280,10 +283,12 @@ var VowTelegramBot = inherit(EventEmitter, {
         var _this = this;
         this.getUpdates()
             .then(function(messages) {
+                debug('[getUpdates] messages count: %s', messages ? messages.length : 0);
                 _this._processMessages(messages);
                 _this._polling();
             })
-            .fail(function() {
+            .fail(function(res) {
+                debug('[getUpdates] failed: %j', res);
                 _this._polling();
             });
 
@@ -304,6 +309,12 @@ var VowTelegramBot = inherit(EventEmitter, {
 
     _request: function(method, params, onSuccess, onError) {
 
+        if (params) {
+            debug('[%s] params: %j', method, params);
+        } else {
+            debug('[%s] no params', method);
+        }
+
         var defer = vow.defer(),
             action = this._apiMethods[method] || {},
             options = {
@@ -314,17 +325,21 @@ var VowTelegramBot = inherit(EventEmitter, {
             isURL;
 
         if (action.file) {
+            debug('[%s] Detecting file field format', method);
             if (fs.existsSync(params[action.file])) {
                 // Local file
+                debug('[%s] Local file %s is exists', method, params[action.file]);
                 try {
                     params[action.file] = fs.createReadStream(params[action.file]);
                 } catch (e) {}
             } else if (params.base64) {
                 // Base64-encoded file
+                debug('[%s] base64-encoded file', method);
                 params.isFile = true;
                 params[action.file] = new Buffer(params[action.file], 'base64');
             } else {
                 // URL
+                debug('[%s] File is URL', method);
                 isURL = true;
             }
         }
@@ -333,6 +348,7 @@ var VowTelegramBot = inherit(EventEmitter, {
         action.headers && (options.headers = action.headers);
 
         if (isURL) {
+            debug('[%s] Try to upload file and make a request to telegram', method);
             this._tryRequest(defer, index, {
                 params: params,
                 action: action,
@@ -342,6 +358,7 @@ var VowTelegramBot = inherit(EventEmitter, {
                 onError: onError
             })
         } else {
+            debug('[%s] Try to make a request to telegram', method);
             this._requestAPI(options, params, action, onSuccess, onError)
                 .then(function(res) {
                     defer.resolve(res);
@@ -365,23 +382,30 @@ var VowTelegramBot = inherit(EventEmitter, {
             deferExternals = vow.defer(),
             _this = this;
 
+        debug('[_tryRequest] Started');
         this._requestExternalFiles(deferExternals, files, index)
             .then(function(res) {
+                debug('[_tryRequest] Request external files done, try to make a request to telegram');
                 params[action.file] = new Buffer(res.data);
                 params.isFile = true;
                 _this._requestAPI(options, params, action, onSuccess, onError)
                     .then(function(res) {
+                        debug('[_tryRequest] Request to telegram API done');
                         defer.resolve(res);
                     })
                     .fail(function(res) {
+                        debug('[_tryRequest] Request to telegram API rejected: %j', res);
                         if ((files instanceof Array) && index < files.length - 1) {
+                            debug('[_tryRequest] But we have more files to try :)');
                             _this._tryRequest(defer, index, ext);
                         } else {
+                            debug('[_tryRequest] And we have no more files to try :(');
                             defer.reject(res);
                         }
                     });
             })
             .fail(function(res) {
+                debug('[_tryRequest] Request external files rejected: %j', res);
                 defer.reject(res);
             });
 
@@ -392,13 +416,17 @@ var VowTelegramBot = inherit(EventEmitter, {
 
         var defer = vow.defer();
 
+        debug('[_requestAPI] Start');
+
         try {
 
             var r = request.post(options, function(err, msg, res) {
                 if (res && res.ok) {
+                    debug('[_requestAPI] Done: %j', res);
                     typeof onSuccess === 'function' && onSuccess(res.result);
                     defer.resolve(res.result);
                 } else {
+                    debug('[_requestAPI] Failed: %j', res);
                     typeof onError === 'function' && onError(res);
                     defer.reject(res);
                 }
@@ -414,6 +442,7 @@ var VowTelegramBot = inherit(EventEmitter, {
             }
 
         } catch (e) {
+            debug('[_requestAPI] Exception: %j', e);
             defer.reject({ status: 'error', exception: e });
         }
 
@@ -427,15 +456,21 @@ var VowTelegramBot = inherit(EventEmitter, {
 
         var _this = this;
 
+        debug('[_requestExternalFiles] Try to load external files, count: %s', urls.length);
+
         this._requestFile(urls[index])
             .then(function(res) {
+                debug('[_requestExternalFiles] File downloaded successfully: %s', urls[index]);
                 defer.resolve(res);
             })
             .fail(function(res) {
+                debug('[_requestExternalFiles] File not downloaded: %s', urls[index]);
                 index++;
                 if (urls[index]) {
+                    debug('[_requestExternalFiles] But we have more files, try: %s', index);
                     _this._requestExternalFiles(defer, urls, index);
                 } else {
+                    debug('[_requestExternalFiles] And we have no more files');
                     defer.reject(res);
                 }
             });
@@ -451,17 +486,21 @@ var VowTelegramBot = inherit(EventEmitter, {
             req;
 
         try {
+            debug('[_requestFile] Start: %s', url);
             req = request({ url: url, timeout: 400 })
                 .on('data', function(chunk) {
                     data = Buffer.concat([data, chunk]);
                 })
                 .on('end', function(res) {
+                    debug('[_requestFile] File downloaded: %s', url);
                     defer.resolve({ status: 'ok', url: url, data: data });
                 })
                 .on('error', function(err) {
+                    debug('[_requestFile] File download failed: %s', url);
                     defer.reject({ status: 'error', url: url, error: err });
                 });
         } catch (e) {
+            debug('[_requestFile] Exception: %j', e);
             defer.reject({ status: 'error', error: 'Unknown exception', exception: e });
         }
 
