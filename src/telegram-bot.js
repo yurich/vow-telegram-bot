@@ -365,8 +365,9 @@ var VowTelegramBot = inherit(EventEmitter, {
             deferExternals = vow.defer(),
             _this = this;
 
-        this._requestExternalFiles(deferExternals, files, index, function(data) {
-                params[action.file] = new Buffer(data);
+        this._requestExternalFiles(deferExternals, files, index)
+            .then(function(res) {
+                params[action.file] = new Buffer(res.data);
                 params.isFile = true;
                 _this._requestAPI(options, params, action, onSuccess, onError)
                     .then(function(res) {
@@ -379,9 +380,6 @@ var VowTelegramBot = inherit(EventEmitter, {
                             defer.reject(res);
                         }
                     });
-            })
-            .then(function(res) {
-                defer.resolve(res);
             })
             .fail(function(res) {
                 defer.reject(res);
@@ -423,20 +421,20 @@ var VowTelegramBot = inherit(EventEmitter, {
 
     },
 
-    _requestExternalFiles: function(defer, urls, index, callback) {
+    _requestExternalFiles: function(defer, urls, index) {
 
         urls instanceof Array || (urls = [urls]);
 
         var _this = this;
 
-        this._requestFile(urls[index], callback)
+        this._requestFile(urls[index])
             .then(function(res) {
                 defer.resolve(res);
             })
             .fail(function(res) {
                 index++;
                 if (urls[index]) {
-                    _this._requestExternalFiles(defer, urls, index, callback);
+                    _this._requestExternalFiles(defer, urls, index);
                 } else {
                     defer.reject(res);
                 }
@@ -446,7 +444,7 @@ var VowTelegramBot = inherit(EventEmitter, {
 
     },
 
-    _requestFile: function(url, callback) {
+    _requestFile: function(url) {
 
         var defer = vow.defer(),
             data = new Buffer(0),
@@ -458,8 +456,7 @@ var VowTelegramBot = inherit(EventEmitter, {
                     data = Buffer.concat([data, chunk]);
                 })
                 .on('end', function(res) {
-                    callback(data);
-                    defer.resolve({ status: 'ok', url: url });
+                    defer.resolve({ status: 'ok', url: url, data: data });
                 })
                 .on('error', function(err) {
                     defer.reject({ status: 'error', url: url, error: err });
