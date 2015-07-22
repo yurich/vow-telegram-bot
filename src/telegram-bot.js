@@ -345,10 +345,10 @@ var VowTelegramBot = inherit(EventEmitter, {
             this._requestAPI(options, params, action, onSuccess, onError)
                 .then(function(res) {
                     defer.resolve(res);
-                }.bind(this))
+                })
                 .fail(function(res) {
                     defer.reject(res);
-                }.bind(this));
+                });
         }
 
         return defer.promise();
@@ -362,23 +362,31 @@ var VowTelegramBot = inherit(EventEmitter, {
             files = ext.files,
             onSuccess = ext.onSuccess,
             onError = ext.onError,
-            deferExternals = vow.defer();
+            deferExternals = vow.defer(),
+            _this = this;
 
         this._requestExternalFiles(deferExternals, files, index, function(data) {
                 params[action.file] = new Buffer(data);
                 params.isFile = true;
-                this._requestAPI(options, params, action, onSuccess, onError)
+                _this._requestAPI(options, params, action, onSuccess, onError)
                     .then(function(res) {
                         defer.resolve(res);
-                    }.bind(this))
+                    })
                     .fail(function(res) {
                         if ((files instanceof Array) && index < files.length - 1) {
-                            this._tryRequest(defer, index, ext);
+                            _this._tryRequest(defer, index, ext);
                         } else {
                             defer.reject(res);
                         }
-                    }.bind(this));
-            }.bind(this))
+                    });
+            })
+            .then(function(res) {
+                defer.resolve(res);
+            })
+            .fail(function(res) {
+                defer.reject(res);
+            });
+
         return defer.promise();
     },
 
