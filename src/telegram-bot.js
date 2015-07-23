@@ -315,6 +315,8 @@ var VowTelegramBot = inherit(EventEmitter, {
             debug('[%s] no params', method);
         }
 
+        this.emit('request', { method: method, params: params });
+
         var defer = vow.defer(),
             action = this._apiMethods[method] || {},
             options = {
