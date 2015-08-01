@@ -3,6 +3,7 @@ var EventEmitter = require('events').EventEmitter,
     inherit = require('inherit'),
     request = require('request'),
     vow = require('vow'),
+    url = require('url'),
     fs = require('fs');
 
 var apiMethods = {
@@ -38,18 +39,114 @@ var VowTelegramBot = inherit(EventEmitter, {
             throw new Error('Telegram Bot Token is required parameter!');
         }
 
-        this._offset = 0;
+        var _this = this;
+
         this._url = 'https://api.telegram.org/bot' + options.token + '/';
-        //this._webhook = options.webhook;
 
         this._apiMethods = apiMethods;
 
-        if (options.polling) {
-            debug('Start polling at init')
-            this.polling(options.polling);
+        if (options.webhook && options.webhook.url) {
+            this._configureWebhook(options.webhook)
+                .then(function(result) {
+                    debug('_configureWebhook done: %j', result);
+                    if (result && options.webhook.port) {
+                        debug('Try to start WebHook server');
+                        _this._configureWebhookListener(options.webhook);
+                    } else {
+                        debug('No listener');
+                        throw new Error('Can\'t configure webhook');
+                    }
+                })
+                .fail(function(result) {
+                    throw new Error('Can\'t configure webhook');
+                });
+        } else if (options.polling) {
+            // Remove webhook
+            this.setWebhook({ url: '' })
+                .then(function() {
+                    _this._offset = 0;
+                    debug('Start polling at init')
+                    _this.polling(options.polling);
+                })
         }
 
-        // this._configureWebHookServer();
+    },
+
+    /**
+     * @param {Object} options
+     * @param {String} options.url
+     * @param {String} [options.key]
+     * @param {String} [options.cert]
+     * @param {String} [options.port] - if no port, use telegramRequest to process messages
+     */
+    _configureWebhook: function(options) {
+        this._webhookPath = url.parse(options.url).path;
+        return this.setWebhook({ url: options.url });
+    },
+
+    _configureWebhookListener: function(options) {
+
+        debug('Start _configureWebhookListener with options=%j', options);
+
+        if (options.key && options.cert && fs.existsSync(options.key) && fs.existsSync(options.cert)) {
+            this._hookServer = require('https').createServer({
+                key: fs.readFileSync(options.key),
+                cert: fs.readFileSync(options.cert)
+            }, this.telegramRequest.bind(this));
+        } else {
+            this._hookServer = require('http').createServer(this.telegramRequest.bind(this));
+        }
+
+        this._hookServer.listen(options.port, options.host, function () {
+            debug('WebHook listening on port %s', options.port);
+        });
+
+    },
+
+    telegramRequest: function(req, res, onSuccess, onError) {
+        var _this = this;
+        debug('telegramRequest start');
+        this._processTelegramRequest(req, res)
+            .then(function(update) {
+                _this._processMessage(update.message);
+            })
+            .fail(function(error) {
+                debug('_processTelegramRequest rejected');
+            });
+    },
+
+    _processTelegramRequest: function(req, res) {
+
+        debug('Process request [%s] %s', req.method, req.url);
+
+        var defer = vow.defer();
+
+        if (req.url === this._webhookPath && req.method === 'POST') {
+            debug('Process request [%s] %s', req.method, req.url);
+            var body = '';
+            req
+                .on('data', function (chunk) {
+                    body += chunk.toString();
+                })
+                .on('end', function() {
+                    try {
+                        debug('Try process request with body: %j', body);
+                        var updates = JSON.parse(body || '{}');
+                        defer.resolve(updates);
+                    } catch(e) {
+                        debug(e);
+                        defer.reject(e);
+                    }
+                });
+            res.end('OK');
+        } else {
+            debug('Skip request [%s] %s', req.method, req.url);
+            res.statusCode = 401;
+            res.end();
+            defer.reject('Skip request [' + req.method + '] ' + req.url);
+        }
+
+        return defer.promise();
 
     },
 
@@ -57,6 +154,16 @@ var VowTelegramBot = inherit(EventEmitter, {
         this._pollingTimeout = options && options.timeout || 3;
         this._pollingLimit = options && options.limit || 100;
         this._startPolling();
+    },
+
+    /**
+     * @param {Object} params
+     * @param {Number} params.url
+     * @param {Function} [onSuccess]
+     * @param {Function} [onError]
+     */
+    setWebhook: function(params, onSuccess, onError) {
+        return this._processRequest('setWebhook', arguments);
     },
 
     /**
@@ -241,17 +348,19 @@ var VowTelegramBot = inherit(EventEmitter, {
     },
 
     _processMessages: function(messages) {
-
-        var nameRE = new RegExp('(@' + this.username + ')', 'gi'),
-            message;
-
         for (var i = 0, l = messages.length; i < l; i++) {
-            message = messages[i].message;
-            if (message) {
-                // TODO: move it
-                message.text && (message.text = message.text.replace(nameRE, '').trim());
-                this.emit('message', message);
-            }
+            this._processMessage(messages[i].message);
+        }
+    },
+
+    _processMessage: function(message) {
+
+        var nameRE = new RegExp('(@' + this.username + ')', 'gi');
+
+        if (message) {
+            // TODO: move it
+            message.text && (message.text = message.text.replace(nameRE, '').trim());
+            this.emit('message', message);
         }
 
     },
