@@ -3,6 +3,7 @@
 npm install vow-telegram-bot
 ```
 
+### Simple examples with long polling:
 ```js
 var VowTelegramBot = require('vow-telegram-bot'),
     bot = new VowTelegramBot({
@@ -56,6 +57,39 @@ bot.on('message', function(message) {
         });
     }, 5000);
 
+});
+```
+
+### Examples with webhook (only HTTPS):
+```js
+var VowTelegramBot = require('vow-telegram-bot'),
+    bot = new VowTelegramBot({
+        token: 'TELEGRAM_BOT_TOKEN',
+        webhook: {
+            url: 'https://example.com/web/hook/path',
+            port: 3333 // listen http requests on port 3333 (ssl maybe configured in nginx)
+        }
+    });
+
+bot.on('message', function(message) {
+    console.log(message);
+});
+```
+
+```js
+var VowTelegramBot = require('vow-telegram-bot'),
+    bot = new VowTelegramBot({
+        token: 'TELEGRAM_BOT_TOKEN',
+        webhook: {
+            url: 'https://example.com/web/hook/path',
+            key: '/path/to/private/key',
+            cert: '/path/to/certificate',
+            port: 443
+        }
+    });
+
+bot.on('message', function(message) {
+    console.log(message);
 });
 ```
 
