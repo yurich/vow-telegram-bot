@@ -1,6 +1,6 @@
 {
   "name": "vow-telegram-bot",
-  "version": "0.0.13",
+  "version": "0.1.0",
   "description": "Telegram Bot API",
   "main": "index.js",
   "keywords": [
