@@ -235,6 +235,10 @@ var VowTelegramBot = inherit(EventEmitter, {
         return this._processRequest('sendChatAction', arguments);
     },
 
+    getFile: function(params) {
+        return this._processRequest('getFile', arguments);
+    },
+
     /**
      * @param {Object} params
      * @param {Number} params.user_id
