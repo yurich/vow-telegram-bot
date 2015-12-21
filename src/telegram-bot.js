@@ -19,7 +19,7 @@ var VowTelegramBot = inherit(EventEmitter, {
 
         var _this = this;
 
-        this._url = 'https://api.telegram.org/bot' + options.token + '/';
+        this._url = (options.url || 'https://api.telegram.org/bot') + options.token + '/';
 
         if (options.webhook && options.webhook.url) {
             this._configureWebhook(options.webhook)
@@ -116,6 +116,19 @@ var VowTelegramBot = inherit(EventEmitter, {
      */
     getMe: function() {
         return this._processRequest('getMe', arguments);
+    },
+
+    /**
+     * Use this method to send answers to the inline query. On success, True is returned.
+     * @param {String} inline_query_id - Unique identifier for answered query
+     * @param {InlineQueryResult[]} results - Results of inline query
+     * @param {Boolean} [is_media] - Pass True, if results must be treated as media files
+     * @param {Integer} [cache_time] - Maximal time, result of the inline query may be cached on the server
+     * @param {Boolean} [is_personal] - Pass True, if results can be cached on the server side only for the user sent inline query. By default result can be returned to any user, searched for the same query
+     * @param {String} [next_offset] - Pass offset that client should send with next inline query with the same text to receive more results, pass empty string, if there is no more results or pagination is not supported. Its length can't exceed 64 bytes.
+     */
+    answerInlineQuery: function(params) {
+        return this._processRequest('answerInlineQuery', arguments);
     },
 
     /**
@@ -251,6 +264,11 @@ var VowTelegramBot = inherit(EventEmitter, {
         return this._processRequest('getUserProfilePhotos', arguments);
     },
 
+    _processQuery: function(query) {
+        debug('Inline query: %j', query);
+        this.emit('inline_query', query);
+    },
+
     _processMessage: function(message) {
 
         var nameRE = new RegExp('(@' + this.username + ')', 'gi');
@@ -270,14 +288,16 @@ var VowTelegramBot = inherit(EventEmitter, {
     telegramRequest: function(req, res, onSuccess, onError) {
 
         var _this = this,
-            message;
+            message, cq;
 
         debug('telegramRequest start');
 
         this._processTelegramRequest(req, res)
             .then(function(update) {
                 message = update.message;
+                cq = update.inline_query;
                 message && _this._processMessage(message);
+                cq && _this._processQuery(cq);
             })
             .fail(function(error) {
                 debug('_processTelegramRequest rejected');
@@ -301,6 +321,8 @@ var VowTelegramBot = inherit(EventEmitter, {
 
         debug('Start _configureWebhookListener with options=%j', options);
 
+        this._onWebHookError = options.onError;
+
         if (options.key && options.cert && fs.existsSync(options.key) && fs.existsSync(options.cert)) {
             this._hookServer = require('https').createServer({
                 key: fs.readFileSync(options.key),
@@ -321,6 +343,8 @@ var VowTelegramBot = inherit(EventEmitter, {
         debug('Process request [%s] %s', req.method, req.url);
 
         var defer = vow.defer(),
+            onWebHookError = this._onWebHookError,
+            hasErrorCB = typeof onWebHookError === 'function',
             body = '';
 
         if (req.url === this._webhookPath && req.method === 'POST') {
@@ -337,13 +361,18 @@ var VowTelegramBot = inherit(EventEmitter, {
                         debug(e);
                         defer.reject(e);
                     }
+                    res.end('OK');
                 });
-            res.end('OK');
         } else {
-            debug('Skip request [%s] %s', req.method, req.url);
-            res.statusCode = 401;
-            res.end();
-            defer.reject('Skip request [' + req.method + '] ' + req.url);
+            if (hasErrorCB) {
+                onWebHookError(req, res);
+                defer.resolve();
+            } else {
+                debug('Skip request [%s] %s', req.method, req.url);
+                res.statusCode = 401;
+                res.end();
+                defer.reject('Skip request [' + req.method + '] ' + req.url);
+            }
         }
 
         return defer.promise();
@@ -375,14 +404,16 @@ var VowTelegramBot = inherit(EventEmitter, {
     _polling: function() {
 
         var _this = this,
-            message;
+            message, cq;
 
         this.getUpdates()
-            .then(function(messages) {
-                debug('[getUpdates] messages count: %s', messages ? messages.length : 0);
-                for (var i = 0, l = messages.length; i < l; i++) {
-                    message = messages[i].message;
+            .then(function(updates) {
+                debug('[getUpdates] messages count: %s', updates ? updates.length : 0);
+                for (var i = 0, l = updates.length; i < l; i++) {
+                    message = updates[i].message;
+                    cq = updates[i].inline_query;
                     message && _this._processMessage(message);
+                    cq && _this._processQuery(cq);
                 }
                 _this._polling();
             })
@@ -424,6 +455,10 @@ var VowTelegramBot = inherit(EventEmitter, {
             files = params && params[action.file],
             index = 0,
             isURL;
+
+        if (method === 'answerInlineQuery') {
+            options.body = params;
+        }
 
         if (action.file) {
             debug('[%s] Detecting file field format', method);
@@ -521,6 +556,10 @@ var VowTelegramBot = inherit(EventEmitter, {
         try {
 
             var r = request.post(options, function(err, msg, res) {
+                if (err) {
+                    debug('[_requestAPI] options: %j', options);
+                    debug('[_requestAPI] Error: %j', err);
+                }
                 if (res && res.ok) {
                     debug('[_requestAPI] Done: %j', res);
                     typeof onSuccess === 'function' && onSuccess(res.result);
@@ -532,7 +571,7 @@ var VowTelegramBot = inherit(EventEmitter, {
                 }
             });
 
-            if (params) {
+            if (params && !options.body) {
                 var form = r.form();
                 for (var i in params) {
                     if (params.hasOwnProperty(i) && i !== 'base64' && i !== 'isFile') {
