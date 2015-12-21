@@ -118,6 +118,10 @@ var VowTelegramBot = inherit(EventEmitter, {
         return this._processRequest('getMe', arguments);
     },
 
+    answerContextQuery: function(params) {
+        return this._processRequest('answerContextQuery', params);
+    },
+
     /**
      * @param {Object} params
      * @param {Number} params.chat_id
@@ -251,6 +255,11 @@ var VowTelegramBot = inherit(EventEmitter, {
         return this._processRequest('getUserProfilePhotos', arguments);
     },
 
+    _processQuery: function(query) {
+        debug('Context query: %j', query);
+        this.emit('context_query', query);
+    },
+
     _processMessage: function(message) {
 
         var nameRE = new RegExp('(@' + this.username + ')', 'gi');
@@ -270,14 +279,16 @@ var VowTelegramBot = inherit(EventEmitter, {
     telegramRequest: function(req, res, onSuccess, onError) {
 
         var _this = this,
-            message;
+            message, cq;
 
         debug('telegramRequest start');
 
         this._processTelegramRequest(req, res)
             .then(function(update) {
                 message = update.message;
+                cq = update.context_query;
                 message && _this._processMessage(message);
+                cq && _this._processQuery(cq);
             })
             .fail(function(error) {
                 debug('_processTelegramRequest rejected');
@@ -375,14 +386,16 @@ var VowTelegramBot = inherit(EventEmitter, {
     _polling: function() {
 
         var _this = this,
-            message;
+            message, cq;
 
         this.getUpdates()
-            .then(function(messages) {
-                debug('[getUpdates] messages count: %s', messages ? messages.length : 0);
-                for (var i = 0, l = messages.length; i < l; i++) {
-                    message = messages[i].message;
+            .then(function(updates) {
+                debug('[getUpdates] messages count: %s', updates ? updates.length : 0);
+                for (var i = 0, l = updates.length; i < l; i++) {
+                    message = updates[i].message;
+                    cq = updates[i].context_query;
                     message && _this._processMessage(message);
+                    cq && _this._processQuery(cq);
                 }
                 _this._polling();
             })
