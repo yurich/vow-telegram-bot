@@ -19,7 +19,7 @@ var VowTelegramBot = inherit(EventEmitter, {
 
         var _this = this;
 
-        this._url = 'https://api.telegram.org/bot' + options.token + '/';
+        this._url = (options.url || 'https://api.telegram.org/bot') + options.token + '/';
 
         if (options.webhook && options.webhook.url) {
             this._configureWebhook(options.webhook)
