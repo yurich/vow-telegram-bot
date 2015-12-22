@@ -119,7 +119,7 @@ var VowTelegramBot = inherit(EventEmitter, {
     },
 
     answerContextQuery: function(params) {
-        return this._processRequest('answerContextQuery', params);
+        return this._processRequest('answerContextQuery', arguments);
     },
 
     /**
