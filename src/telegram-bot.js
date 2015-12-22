@@ -438,6 +438,10 @@ var VowTelegramBot = inherit(EventEmitter, {
             index = 0,
             isURL;
 
+        if (method === 'answerContextQuery') {
+            options.body = params;
+        }
+
         if (action.file) {
             debug('[%s] Detecting file field format', method);
             if (fs.existsSync(params[action.file])) {
@@ -549,7 +553,7 @@ var VowTelegramBot = inherit(EventEmitter, {
                 }
             });
 
-            if (params) {
+            if (params && !options.body) {
                 var form = r.form();
                 for (var i in params) {
                     if (params.hasOwnProperty(i) && i !== 'base64' && i !== 'isFile') {
