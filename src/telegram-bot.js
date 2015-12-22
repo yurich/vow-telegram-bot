@@ -534,6 +534,10 @@ var VowTelegramBot = inherit(EventEmitter, {
         try {
 
             var r = request.post(options, function(err, msg, res) {
+                if (err) {
+                    debug('[_requestAPI] options: %j', options);
+                    debug('[_requestAPI] Error: %j', err);
+                }
                 if (res && res.ok) {
                     debug('[_requestAPI] Done: %j', res);
                     typeof onSuccess === 'function' && onSuccess(res.result);
