@@ -118,6 +118,15 @@ var VowTelegramBot = inherit(EventEmitter, {
         return this._processRequest('getMe', arguments);
     },
 
+    /**
+     * Use this method to send answers to the context query. On success, True is returned.
+     * @param {String} context_query_id - Unique identifier for answered query
+     * @param {ContextQueryResult[]} results - Results of context query
+     * @param {Boolean} [is_media] - Pass True, if results must be treated as media files
+     * @param {Integer} [cache_time] - Maximal time, result of the context query may be cached on the server
+     * @param {Boolean} [is_personal] - Pass True, if results can be cached on the server side only for the user sent context query. By default result can be returned to any user, searched for the same query
+     * @param {String} [next_offset] - Pass offset that client should send with next context query with the same text to receive more results, pass empty string, if there is no more results or pagination is not supported. Its length can't exceed 64 bytes.
+     */
     answerContextQuery: function(params) {
         return this._processRequest('answerContextQuery', arguments);
     },
@@ -312,6 +321,8 @@ var VowTelegramBot = inherit(EventEmitter, {
 
         debug('Start _configureWebhookListener with options=%j', options);
 
+        this._onWebHookError = options.onError;
+
         if (options.key && options.cert && fs.existsSync(options.key) && fs.existsSync(options.cert)) {
             this._hookServer = require('https').createServer({
                 key: fs.readFileSync(options.key),
@@ -332,6 +343,8 @@ var VowTelegramBot = inherit(EventEmitter, {
         debug('Process request [%s] %s', req.method, req.url);
 
         var defer = vow.defer(),
+            onWebHookError = this._onWebHookError,
+            hasErrorCB = typeof onWebHookError === 'function',
             body = '';
 
         if (req.url === this._webhookPath && req.method === 'POST') {
@@ -351,10 +364,15 @@ var VowTelegramBot = inherit(EventEmitter, {
                 });
             res.end('OK');
         } else {
-            debug('Skip request [%s] %s', req.method, req.url);
-            res.statusCode = 401;
-            res.end();
-            defer.reject('Skip request [' + req.method + '] ' + req.url);
+            if (hasErrorCB) {
+                onWebHookError(req, res);
+                defer.resolve();
+            } else {
+                debug('Skip request [%s] %s', req.method, req.url);
+                res.statusCode = 401;
+                res.end();
+                defer.reject('Skip request [' + req.method + '] ' + req.url);
+            }
         }
 
         return defer.promise();
