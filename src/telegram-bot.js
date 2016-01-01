@@ -119,16 +119,16 @@ var VowTelegramBot = inherit(EventEmitter, {
     },
 
     /**
-     * Use this method to send answers to the context query. On success, True is returned.
-     * @param {String} context_query_id - Unique identifier for answered query
-     * @param {ContextQueryResult[]} results - Results of context query
+     * Use this method to send answers to the inline query. On success, True is returned.
+     * @param {String} inline_query_id - Unique identifier for answered query
+     * @param {InlineQueryResult[]} results - Results of inline query
      * @param {Boolean} [is_media] - Pass True, if results must be treated as media files
-     * @param {Integer} [cache_time] - Maximal time, result of the context query may be cached on the server
-     * @param {Boolean} [is_personal] - Pass True, if results can be cached on the server side only for the user sent context query. By default result can be returned to any user, searched for the same query
-     * @param {String} [next_offset] - Pass offset that client should send with next context query with the same text to receive more results, pass empty string, if there is no more results or pagination is not supported. Its length can't exceed 64 bytes.
+     * @param {Integer} [cache_time] - Maximal time, result of the inline query may be cached on the server
+     * @param {Boolean} [is_personal] - Pass True, if results can be cached on the server side only for the user sent inline query. By default result can be returned to any user, searched for the same query
+     * @param {String} [next_offset] - Pass offset that client should send with next inline query with the same text to receive more results, pass empty string, if there is no more results or pagination is not supported. Its length can't exceed 64 bytes.
      */
-    answerContextQuery: function(params) {
-        return this._processRequest('answerContextQuery', arguments);
+    answerInlineQuery: function(params) {
+        return this._processRequest('answerInlineQuery', arguments);
     },
 
     /**
@@ -265,8 +265,8 @@ var VowTelegramBot = inherit(EventEmitter, {
     },
 
     _processQuery: function(query) {
-        debug('Context query: %j', query);
-        this.emit('context_query', query);
+        debug('Inline query: %j', query);
+        this.emit('inline_query', query);
     },
 
     _processMessage: function(message) {
@@ -295,7 +295,7 @@ var VowTelegramBot = inherit(EventEmitter, {
         this._processTelegramRequest(req, res)
             .then(function(update) {
                 message = update.message;
-                cq = update.context_query;
+                cq = update.inline_query;
                 message && _this._processMessage(message);
                 cq && _this._processQuery(cq);
             })
@@ -411,7 +411,7 @@ var VowTelegramBot = inherit(EventEmitter, {
                 debug('[getUpdates] messages count: %s', updates ? updates.length : 0);
                 for (var i = 0, l = updates.length; i < l; i++) {
                     message = updates[i].message;
-                    cq = updates[i].context_query;
+                    cq = updates[i].inline_query;
                     message && _this._processMessage(message);
                     cq && _this._processQuery(cq);
                 }
@@ -456,7 +456,7 @@ var VowTelegramBot = inherit(EventEmitter, {
             index = 0,
             isURL;
 
-        if (method === 'answerContextQuery') {
+        if (method === 'answerInlineQuery') {
             options.body = params;
         }
 
