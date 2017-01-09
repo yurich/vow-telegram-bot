@@ -1,15 +1,15 @@
 {
   "name": "vow-telegram-bot",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Telegram Bot API",
   "main": "index.js",
   "keywords": [
-      "telegram bot api",
-      "telegram bot",
-      "telegram api",
-      "telegram",
-      "bot",
-      "api"
+    "telegram bot api",
+    "telegram bot",
+    "telegram api",
+    "telegram",
+    "bot",
+    "api"
   ],
   "author": "Andrey Smirnov <smirnovandr@yandex.ru>",
   "license": "MIT",
