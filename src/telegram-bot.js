@@ -361,8 +361,8 @@ var VowTelegramBot = inherit(EventEmitter, {
                         debug(e);
                         defer.reject(e);
                     }
+                    res.end('OK');
                 });
-            res.end('OK');
         } else {
             if (hasErrorCB) {
                 onWebHookError(req, res);
