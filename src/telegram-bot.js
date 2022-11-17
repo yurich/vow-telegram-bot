@@ -6,8 +6,6 @@ var EventEmitter = require('events').EventEmitter,
     url = require('url'),
     fs = require('fs');
 
-request = request.defaults({ json: true });
-
 var VowTelegramBot = inherit(EventEmitter, {
 
     __constructor: function(options) {
@@ -20,6 +18,10 @@ var VowTelegramBot = inherit(EventEmitter, {
         var _this = this;
 
         this._url = (options.url || 'https://api.telegram.org/bot') + options.token + '/';
+        this._request = request.defaults({
+            json: true,
+            agent: options.agent,
+        });
 
         if (options.webhook && options.webhook.url) {
             this._configureWebhook(options.webhook)
@@ -89,7 +91,7 @@ var VowTelegramBot = inherit(EventEmitter, {
             offset = params.offset;
         }
 
-        this._request('getUpdates', {
+        this._makeRequest('getUpdates', {
                 timeout: timeout || this._pollingTimeout,
                 limit: limit || this._pollingLimit,
                 offset: offset || this._offset + 1
@@ -433,11 +435,11 @@ var VowTelegramBot = inherit(EventEmitter, {
             args.push(params[keys[i]]);
         }
 
-        return this._request.apply(this, args);
+        return this._makeRequest.apply(this, args);
 
     },
 
-    _request: function(method, params, onSuccess, onError) {
+    _makeRequest: function(method, params, onSuccess, onError) {
 
         if (params) {
             debug('[%s] params: %j', method, params);
@@ -456,7 +458,7 @@ var VowTelegramBot = inherit(EventEmitter, {
             index = 0,
             isURL;
 
-        if (method === 'answerInlineQuery') {
+        if (method === 'answerInlineQuery' || method === 'setWebhook') {
             options.body = params;
         }
 
@@ -481,6 +483,9 @@ var VowTelegramBot = inherit(EventEmitter, {
         }
 
         action.gzip && (options.gzip = action.gzip);
+
+        debug('[%s] Try to make a request to telegram with options: %j', method, options);
+        debug('[%s] Try to make a request to telegram with action: %j', method, action);
 
         if (isURL) {
             debug('[%s] Try to upload file and make a request to telegram', method);
@@ -555,7 +560,7 @@ var VowTelegramBot = inherit(EventEmitter, {
 
         try {
 
-            var r = request.post(options, function(err, msg, res) {
+            var r = this._request.post(options, function(err, msg, res) {
                 if (err) {
                     debug('[_requestAPI] options: %j', options);
                     debug('[_requestAPI] Error: %j', err);
@@ -626,7 +631,7 @@ var VowTelegramBot = inherit(EventEmitter, {
 
         try {
             debug('[_requestFile] Start: %s', url);
-            req = request({ url: url, timeout: 400 })
+            req = this._request({ url: url, timeout: 400 })
                 .on('data', function(chunk) {
                     data = Buffer.concat([data, chunk]);
                 })
